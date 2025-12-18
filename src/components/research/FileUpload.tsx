@@ -9,9 +9,10 @@ import { Upload, X } from 'lucide-react';
 interface FileUploadProps {
   onFileUpload: (url: string) => void;
   disabled?: boolean;
+  onUploadingChange?: (uploading: boolean) => void;
 }
 
-export const FileUpload = ({ onFileUpload, disabled }: FileUploadProps) => {
+export const FileUpload = ({ onFileUpload, disabled, onUploadingChange }: FileUploadProps) => {
   const [uploading, setUploading] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -43,6 +44,7 @@ export const FileUpload = ({ onFileUpload, disabled }: FileUploadProps) => {
     }
 
     setUploading(true);
+    onUploadingChange?.(true);
     setFileName(file.name);
 
     try {
@@ -61,6 +63,7 @@ export const FileUpload = ({ onFileUpload, disabled }: FileUploadProps) => {
       setFileName(null);
     } finally {
       setUploading(false);
+      onUploadingChange?.(false);
     }
   };
 

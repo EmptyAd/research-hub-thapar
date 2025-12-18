@@ -2,62 +2,44 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "@/components/ui/input-otp";
+import { Link } from "react-router-dom";
+import { supabase } from "@/utils/supabaseClient";
+
+function generateTempPassword(len = 16) {
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()-_=+[]{};:,.?';
+  const bytes = new Uint8Array(len);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map(b => alphabet[b % alphabet.length]).join('');
+}
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [step, setStep] = useState<"email" | "otp" | "password">("email");
+  const [sent, setSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { sendPasswordResetOtp, verifyOtpAndResetPassword } = useAuth();
-  const navigate = useNavigate();
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSendOtp = async (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
-    const { error } = await sendPasswordResetOtp(email);
-    
-    if (!error) {
-      setStep("otp");
-    }
-    
-    setIsLoading(false);
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (otp.length !== 6) return;
-    
-    setStep("password");
-  };
-
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    
-    const { error } = await verifyOtpAndResetPassword(email, otp, newPassword);
-    
-    if (!error) {
-      navigate("/login");
-    }
-    
+    setError(null);
+    const redirectTo = `${window.location.origin}/reset-password`;
+    // 1) Ensure a Supabase Auth user exists for this email (seed if needed)
+    try {
+      const temp = generateTempPassword();
+      await supabase.auth.signUp({ email, password: temp });
+      // Ignore result; user may already exist or need confirmation
+    } catch (_) {}
+    // 2) Send reset email regardless
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    if (!error) setSent(true); else setError(error.message);
     setIsLoading(false);
   };
 
   return (
     <main className="container mx-auto py-10 max-w-md">
-      <h1 className="text-3xl font-bold mb-6">Reset Password</h1>
-      
-      {step === "email" && (
-        <form onSubmit={handleSendOtp} className="space-y-4">
+      <h1 className="text-3xl font-bold mb-6">Forgot Password</h1>
+      {!sent ? (
+        <form onSubmit={handleSend} className="space-y-4">
           <div>
             <Label htmlFor="email">Email</Label>
             <Input 
@@ -69,73 +51,15 @@ const ForgotPassword = () => {
               required 
             />
           </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
           <Button type="submit" variant="hero" className="w-full" disabled={isLoading}>
-            {isLoading ? "Sending OTP..." : "Send OTP"}
+            {isLoading ? "Sending..." : "Send reset link"}
           </Button>
         </form>
-      )}
-
-      {step === "otp" && (
-        <form onSubmit={handleVerifyOtp} className="space-y-4">
-          <div>
-            <Label htmlFor="otp">Enter 6-digit OTP</Label>
-            <p className="text-sm text-muted-foreground mb-4">
-              We've sent a verification code to {email}
-            </p>
-            <div className="flex justify-center">
-              <InputOTP
-                maxLength={6}
-                value={otp}
-                onChange={(value) => setOtp(value)}
-              >
-                <InputOTPGroup>
-                  <InputOTPSlot index={0} />
-                  <InputOTPSlot index={1} />
-                  <InputOTPSlot index={2} />
-                  <InputOTPSlot index={3} />
-                  <InputOTPSlot index={4} />
-                  <InputOTPSlot index={5} />
-                </InputOTPGroup>
-              </InputOTP>
-            </div>
-          </div>
-          <Button 
-            type="submit" 
-            variant="hero" 
-            className="w-full" 
-            disabled={otp.length !== 6}
-          >
-            Verify OTP
-          </Button>
-          <Button 
-            type="button" 
-            variant="ghost" 
-            className="w-full"
-            onClick={() => setStep("email")}
-          >
-            Back to Email
-          </Button>
-        </form>
-      )}
-
-      {step === "password" && (
-        <form onSubmit={handleResetPassword} className="space-y-4">
-          <div>
-            <Label htmlFor="newPassword">New Password</Label>
-            <Input 
-              id="newPassword" 
-              type="password" 
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Enter new password"
-              required 
-              minLength={6}
-            />
-          </div>
-          <Button type="submit" variant="hero" className="w-full" disabled={isLoading}>
-            {isLoading ? "Resetting Password..." : "Reset Password"}
-          </Button>
-        </form>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-sm">If an account exists for <strong>{email}</strong>, you’ll receive an email with a reset link.</p>
+        </div>
       )}
 
       <p className="text-sm text-muted-foreground mt-4">

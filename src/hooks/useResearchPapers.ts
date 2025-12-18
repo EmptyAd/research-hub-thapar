@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/utils/supabaseClient';
 import { useToast } from '@/hooks/use-toast';
 import type { ResearchPaper } from '@/components/research/ResearchCard';
+import { getSessionUser } from '@/utils/auth';
+import { createDocument } from '@/utils/documents';
 
 export interface DatabasePaper {
   id: string;
@@ -12,7 +13,7 @@ export interface DatabasePaper {
   collaborators: string[];
   issue_date: string;
   publish_date?: string;
-  status: 'published' | 'in-review' | 'draft';
+  status: 'published' | 'under_review' | 'draft';
   keywords: string[];
   pdf_url?: string;
   pdf_path?: string;
@@ -30,7 +31,6 @@ export interface DatabasePaper {
 export const useResearchPapers = () => {
   const [papers, setPapers] = useState<ResearchPaper[]>([]);
   const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
   const { toast } = useToast();
 
   const transformPaper = (dbPaper: DatabasePaper): ResearchPaper => ({
@@ -40,7 +40,7 @@ export const useResearchPapers = () => {
     collaborators: dbPaper.collaborators,
     date: dbPaper.issue_date,
     publishDate: dbPaper.publish_date,
-    status: dbPaper.status,
+    status: (dbPaper.status === 'under_review' ? 'in-review' : dbPaper.status) as any,
     keywords: dbPaper.keywords,
     pdfUrl: dbPaper.pdf_url,
     owner: dbPaper.owner,
@@ -54,50 +54,104 @@ export const useResearchPapers = () => {
     setLoading(true);
     
     try {
-      let query = supabase
-        .from('research_papers')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const sessionUser = getSessionUser();
+      if (sessionUser?.id) {
+        // Logged-in: split into two queries to avoid OR across related table path
+        // q1: owned or published
+        const q1 = await supabase
+          .from('documents')
+          .select('*, authors:document_authors(*, user:users(id, full_name, department))')
+          .eq('type_id', 'research_paper')
+          .or(`created_by.eq.${sessionUser.id},status.eq.published`)
+          .order('created_at', { ascending: false });
+        if (q1.error) throw q1.error;
+        const ownedOrPublished = q1.data || [];
 
-      if (user?.id) {
-        // If logged in, fetch papers where user is owner OR co-author OR published papers
-        query = query.or(`owner.eq.${user.id},co_author_ids.cs.{${user.id}},status.eq.published`);
-      } else {
-        // If not logged in, only fetch published papers
-        query = query.eq('status', 'published');
-      }
+        // q2: documents where user is a co-author
+        const da = await supabase
+          .from('document_authors')
+          .select('document_id')
+          .eq('user_id', sessionUser.id);
+        if (da.error) throw da.error;
+        const docIds = Array.from(new Set((da.data || []).map((r: any) => r.document_id)));
+        let coauthored: any[] = [];
+        if (docIds.length > 0) {
+          const q2 = await supabase
+            .from('documents')
+            .select('*, authors:document_authors(*, user:users(id, full_name, department))')
+            .eq('type_id', 'research_paper')
+            .in('id', docIds)
+            .order('created_at', { ascending: false });
+          if (q2.error) throw q2.error;
+          coauthored = q2.data || [];
+        }
 
-      const { data, error } = await query;
-
-      console.log('Papers data:', data);
-      console.log('Papers error:', error);
-
-      if (error) throw error;
-
-      // Fetch co-authors for papers that have co_author_ids
-      const papersWithCoAuthors = await Promise.all(
-        (data || []).map(async (paper: any) => {
-          if (paper.co_author_ids && paper.co_author_ids.length > 0) {
-            const { data: coAuthorsData } = await supabase
-              .from('co_authors')
-              .select('id, full_name, department')
-              .in('id', paper.co_author_ids);
-            
-            return {
-              ...paper,
-              co_authors: coAuthorsData || []
-            };
-          }
+        // merge and de-duplicate by id
+        const byId = new Map<string, any>();
+        [...ownedOrPublished, ...coauthored].forEach((d: any) => byId.set(d.id, d));
+        const data = Array.from(byId.values());
+        console.log('Papers data:', data);
+        const mapped: DatabasePaper[] = (data).map((d: any) => {
+          const md = d.metadata || {};
+          const coAuthors = (d.authors || []).filter((a: any) => !a.is_primary).map((a: any) => a.user_id);
+          const coAuthorDetails = (d.authors || []).filter((a: any) => !a.is_primary).map((a: any) => ({
+            id: a.user_id,
+            full_name: a.user?.full_name,
+            department: a.user?.department,
+          }));
+          const collaborators = (d.authors || []).map((a: any) => a.user?.full_name).filter(Boolean);
           return {
-            ...paper,
-            co_authors: []
-          };
-        })
-      );
-
-      const transformedPapers = papersWithCoAuthors.map(transformPaper);
-      console.log('Transformed papers:', transformedPapers);
-      setPapers(transformedPapers);
+            id: d.id,
+            owner: d.created_by,
+            title: d.title,
+            paper_number: '',
+            collaborators,
+            issue_date: (md.issue_date || md.publication_date || d.created_at || '').slice(0,10),
+            publish_date: undefined,
+            status: d.status,
+            keywords: Array.isArray(md.keywords) ? md.keywords : [],
+            pdf_url: d.file_url,
+            pdf_path: undefined,
+            department: md.department,
+            co_author_ids: coAuthors,
+            created_at: d.created_at,
+            updated_at: d.updated_at,
+            co_authors: coAuthorDetails,
+          } as DatabasePaper;
+        });
+        const transformedPapers = mapped.map(transformPaper);
+        setPapers(transformedPapers);
+      } else {
+        // Logged-out: read published-only from research_papers_simple
+        const { data, error } = await supabase
+          .from('research_papers_simple')
+          .select('*')
+          .eq('status', 'published')
+          .order('created_at', { ascending: false });
+        console.log('Papers data:', data);
+        console.log('Papers error:', error);
+        if (error) throw error;
+        const mapped: DatabasePaper[] = (data || []).map((r: any) => ({
+          id: r.id,
+          owner: '',
+          title: r.title,
+          paper_number: '',
+          collaborators: (r.authors || []),
+          issue_date: (r.issue_date || '').slice(0,10),
+          publish_date: undefined,
+          status: r.status,
+          keywords: [],
+          pdf_url: r.file_url,
+          pdf_path: undefined,
+          department: (r.department_text || null),
+          co_author_ids: [],
+          created_at: r.created_at,
+          updated_at: r.updated_at,
+          co_authors: [],
+        }));
+        const transformedPapers = mapped.map(transformPaper);
+        setPapers(transformedPapers);
+      }
     } catch (error: any) {
       console.error('Papers fetch error:', error);
       toast({
@@ -111,7 +165,8 @@ export const useResearchPapers = () => {
   };
 
   const createPaper = async (paperData: Omit<ResearchPaper, 'id' | 'owner'>) => {
-    if (!user) {
+    const sessionUser = getSessionUser();
+    if (!sessionUser) {
       toast({
         title: "Authentication required",
         description: "Please log in to upload papers.",
@@ -121,48 +176,30 @@ export const useResearchPapers = () => {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('research_papers')
-        .insert({
-          owner: user.id,
-          title: paperData.title,
-          paper_number: paperData.paperNumber,
-          collaborators: paperData.collaborators,
-          issue_date: paperData.date,
-          publish_date: paperData.publishDate || null,
-          status: paperData.status,
+      // Create via documents API
+      const input = {
+        type_id: 'research_paper',
+        title: paperData.title,
+        description: null,
+        file_url: paperData.pdfUrl || null,
+        status: (paperData.status as any) || 'under_review',
+        metadata: {
+          abstract: '',
+          department: paperData.department || null,
           keywords: paperData.keywords || [],
-          pdf_url: paperData.pdfUrl,
-          department: paperData.department as any,
-          co_author_ids: paperData.coAuthorIds || []
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Fetch co-authors for the new paper
-      let coAuthors: any[] = [];
-      if (data.co_author_ids && data.co_author_ids.length > 0) {
-        const { data: coAuthorsData } = await supabase
-          .from('co_authors')
-          .select('id, full_name, department')
-          .in('id', data.co_author_ids);
-        coAuthors = coAuthorsData || [];
-      }
-
-      const newPaper = transformPaper({
-        ...data,
-        co_authors: coAuthors
-      });
-      setPapers(prev => [newPaper, ...prev]);
-      
-      toast({
-        title: "Paper uploaded",
-        description: "Your research paper has been successfully uploaded."
-      });
-
-      return newPaper;
+          issue_date: (paperData.date ? `${String(paperData.date).slice(0,4)}-01-01` : null),
+        },
+        authors: [
+          { user_id: sessionUser.id, is_primary: true, order: 0, role: 'author' },
+          ...(paperData.coAuthorIds || []).map((id, idx) => ({ user_id: id, is_primary: false, order: idx + 1, role: 'author' }))
+        ],
+      } as const;
+      const doc = await createDocument(input as any, sessionUser.id);
+      // Map to ResearchPaper card shape minimally
+      toast({ title: 'Paper uploaded', description: 'Your research paper has been successfully uploaded.' });
+      // Refresh list to include the new item
+      await fetchPapers();
+      return null;
     } catch (error: any) {
       toast({
         title: "Upload failed",
@@ -174,12 +211,11 @@ export const useResearchPapers = () => {
   };
 
   const uploadFile = async (file: File) => {
-    if (!user) {
-      throw new Error('User must be authenticated to upload files');
-    }
+    const sessionUser = getSessionUser();
+    if (!sessionUser) throw new Error('User must be authenticated to upload files');
 
     const fileExt = file.name.split('.').pop();
-    const fileName = `${user.id}/${Date.now()}.${fileExt}`;
+    const fileName = `${sessionUser.id}/${Date.now()}.${fileExt}`;
 
     const { data, error } = await supabase.storage
       .from('papers')
@@ -196,7 +232,7 @@ export const useResearchPapers = () => {
 
   useEffect(() => {
     fetchPapers();
-  }, [user]);
+  }, []);
 
   return {
     papers,

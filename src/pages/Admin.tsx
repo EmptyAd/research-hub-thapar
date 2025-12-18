@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/utils/supabaseClient";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Home } from "lucide-react";
@@ -38,7 +38,8 @@ const Admin = () => {
 
         const total = papers?.length || 0;
         const published = papers?.filter(p => p.status === 'published').length || 0;
-        const inReview = papers?.filter(p => p.status === 'in-review').length || 0;
+        // Our create/edit uses 'under_review' everywhere
+        const inReview = papers?.filter(p => p.status === 'under_review').length || 0;
         const draft = papers?.filter(p => p.status === 'draft').length || 0;
 
         setStats({ total, published, inReview, draft });

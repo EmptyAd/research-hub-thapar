@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/utils/supabaseClient';
 
-export type UserRole = 'admin' | 'teacher' | null;
+export type UserRole = 'admin' | 'hod' | 'user' | null;
 
 export const useUserRole = () => {
   const { user } = useAuth();
@@ -11,35 +11,32 @@ export const useUserRole = () => {
 
   useEffect(() => {
     const fetchRole = async () => {
-      if (!user) {
+      if (!user?.id) {
         setRole(null);
         setLoading(false);
         return;
       }
-
       try {
         const { data, error } = await supabase
-          .from('user_roles')
+          .from('users')
           .select('role')
-          .eq('user_id', user.id)
-          .single();
-
+          .eq('id', user.id)
+          .maybeSingle();
         if (error) {
           console.error('Error fetching role:', error);
-          setRole('teacher'); // Default to teacher if no role found
+          setRole('user');
         } else {
-          setRole(data.role as UserRole);
+          setRole(((data as any)?.role as UserRole) ?? 'user');
         }
       } catch (err) {
         console.error('Error:', err);
-        setRole('teacher');
+        setRole('user');
       } finally {
         setLoading(false);
       }
     };
-
     fetchRole();
-  }, [user]);
+  }, [user?.id]);
 
-  return { role, loading, isAdmin: role === 'admin', isTeacher: role === 'teacher' };
+  return { role, loading, isAdmin: role === 'admin', isUser: role === 'user', isHod: role === 'hod' };
 };

@@ -1,6 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
 
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
 All colors MUST be HSL.
@@ -8,49 +9,51 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 215 25% 15%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 215 25% 15%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 215 25% 15%;
-
-    --primary: 215 70% 35%;
+    /* Brand and interactive */
+    --primary: 0 60% 30%; /* #7A1F1F deep maroon */
+    --primary-hover: 0 70% 36%; /* between #8B0000 and #B22222 */
     --primary-foreground: 0 0% 100%;
+    --accent: 47 56% 52%; /* #C9A646 gold */
+    --accent-foreground: 210 14% 20%; /* dark gray for contrast */
 
-    --secondary: 210 20% 95%;
-    --secondary-foreground: 215 25% 20%;
+    /* Surfaces */
+    --background: 0 0% 100%; /* #FFFFFF */
+    --card: 0 0% 100%;
+    --popover: 0 0% 100%;
+    --secondary: 0 0% 96%; /* #F5F5F5 */
+    --muted: 0 0% 90%; /* #E5E5E5 */
 
-    --muted: 210 20% 96%;
-    --muted-foreground: 215 15% 45%;
+    /* Text */
+    --foreground: 0 0% 20%; /* #333333 */
+    --muted-foreground: 215 10% 40%; /* slightly muted dark gray */
+    --secondary-foreground: 0 0% 0%; /* #000000 */
 
-    --accent: 40 90% 50%;
-    --accent-foreground: 215 25% 15%;
-
-    --destructive: 0 84% 60%;
+    /* States */
+    --destructive: 0 78% 50%; /* slightly deeper red */
     --destructive-foreground: 0 0% 98%;
 
-    --border: 215 20% 88%;
-    --input: 215 20% 90%;
-    --ring: 215 70% 35%;
+    /* Borders, inputs, rings */
+    --border: 0 0% 90%; /* #E5E5E5 */
+    --input: 0 0% 90%;
+    --ring: 0 100% 27%; /* match primary */
 
-    --radius: 0.5rem;
+    /* Radii & effects */
+    --radius: 0.75rem; /* rounded-xl ~12px */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    --primary-glow: 215 70% 50%;
+    --primary-glow: 0 100% 35%;
     --gradient-hero: radial-gradient(120% 90% at 10% 10%, hsl(var(--primary) / 0.12), transparent 40%);
-    --shadow-elegant: 0 12px 28px -10px hsl(var(--primary) / 0.3);
-    --shadow-glow: 0 0 40px hsl(var(--primary) / 0.2);
+    --shadow-elegant: 0 12px 28px -10px hsl(var(--primary) / 0.18);
+    --shadow-glow: 0 0 40px hsl(var(--primary) / 0.15);
 
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 215 25% 20%;
-    --sidebar-primary: 215 70% 35%;
+    /* Sidebar (if used) */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 215 16% 36%; /* #4F5B6E like */
+    --sidebar-primary: 0 100% 27%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 20% 95%;
-    --sidebar-accent-foreground: 215 25% 20%;
-    --sidebar-border: 215 20% 88%;
-    --sidebar-ring: 215 70% 35%;
+    --sidebar-accent: 0 0% 96%;
+    --sidebar-accent-foreground: 215 16% 36%;
+    --sidebar-border: 0 0% 90%;
+    --sidebar-ring: 0 100% 27%;
   }
 
   .dark {
@@ -101,6 +104,11 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    font-family: 'Manrope', ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, 'Apple Color Emoji', 'Segoe UI Emoji';
+  }
+  h1,h2,h3,h4,h5,h6 {
+    font-weight: 700;
+    letter-spacing: -0.01em;
   }
 }
 

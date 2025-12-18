@@ -47,9 +47,9 @@ export const UserProfileDropdown = () => {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link to="/profile" className="cursor-pointer">
+          <Link to={`/dashboard`} className="cursor-pointer">
             <User className="mr-2 h-4 w-4" />
-            <span>View Profile</span>
+            <span>Profile</span>
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
