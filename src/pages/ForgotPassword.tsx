@@ -5,12 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Link } from "react-router-dom";
 import { supabase } from "@/utils/supabaseClient";
 
-function generateTempPassword(len = 16) {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*()-_=+[]{};:,.?';
-  const bytes = new Uint8Array(len);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes).map(b => alphabet[b % alphabet.length]).join('');
-}
+// Using Supabase built-in password reset email flow
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -22,18 +17,16 @@ const ForgotPassword = () => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
-    // Use explicit production URL to avoid mismatched origins in emails
-    const redirectTo = 'https://research-hub-thapar.vercel.app/reset-password';
-    // 1) Ensure a Supabase Auth user exists for this email (seed if needed)
     try {
-      const temp = generateTempPassword();
-      await supabase.auth.signUp({ email, password: temp });
-      // Ignore result; user may already exist or need confirmation
-    } catch (_) {}
-    // 2) Send reset email regardless
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
-    if (!error) setSent(true); else setError(error.message);
-    setIsLoading(false);
+      const redirectTo = 'https://research-hub-thapar.vercel.app/reset-password';
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) throw error;
+      setSent(true);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to send reset link.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
