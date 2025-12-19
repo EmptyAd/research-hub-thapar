@@ -13,6 +13,8 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   sendPasswordResetOtp: (email: string) => Promise<{ error: any }>;
   verifyOtpAndResetPassword: (email: string, token: string, newPassword: string) => Promise<{ error: any }>;
+  requestPasswordReset: (email: string) => Promise<{ error: any }>;
+  completePasswordReset: (newPassword: string) => Promise<{ error: any }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -80,6 +82,42 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       });
     }
     
+    return { error };
+  };
+
+  // Password reset via emailed link
+  const requestPasswordReset = async (email: string) => {
+    const redirectTo = `${window.location.origin}/reset-password`;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    if (error) {
+      toast({
+        title: 'Failed to send reset email',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: 'Reset email sent',
+        description: 'Check your inbox for the password reset link.'
+      });
+    }
+    return { error };
+  };
+
+  const completePasswordReset = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      toast({
+        title: 'Failed to reset password',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } else {
+      toast({
+        title: 'Password updated',
+        description: 'You can now log in with your new password.'
+      });
+    }
     return { error };
   };
 
@@ -227,7 +265,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     signIn,
     signOut,
     sendPasswordResetOtp,
-    verifyOtpAndResetPassword
+    verifyOtpAndResetPassword,
+    requestPasswordReset,
+    completePasswordReset
   };
 
   return (
