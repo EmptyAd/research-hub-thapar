@@ -22,7 +22,8 @@ const ForgotPassword = () => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
-    const redirectTo = `${window.location.origin}/reset-password`;
+    // Use explicit production URL to avoid mismatched origins in emails
+    const redirectTo = 'https://research-hub-thapar.vercel.app/reset-password';
     // 1) Ensure a Supabase Auth user exists for this email (seed if needed)
     try {
       const temp = generateTempPassword();
