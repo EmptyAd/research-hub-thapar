@@ -43,7 +43,7 @@ const Index = () => {
   const [conferences, setConferences] = useState<any[]>([]);
   const [people, setPeople] = useState<Array<{ id: string; full_name: string; email: string; department: string | null }>>([]);
   const pageSize = 10;
-  const [sortBy, setSortBy] = useState<'created_at' | 'issue_date' | 'title' | 'status'>('issue_date');
+  const [sortBy, setSortBy] = useState<'created_at' | 'issue_date' | 'title' | 'status' | 'department' | 'authors' | 'publication_year'>('issue_date');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -55,7 +55,9 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState<'papers' | 'patents' | 'certificates' | 'conferences' | 'people'>('papers');
   const [cpMsg, setCpMsg] = useState<string | null>(null);
 
-  async function load(overrides?: Partial<{ q: string; department: string; status: string; dateFrom: string; dateTo: string; mineOnly: boolean; page: number; sortBy: 'created_at' | 'issue_date' | 'title' | 'status'; sortDir: 'asc' | 'desc'; }>) {
+  // Helper to compute publication year for display
+
+  async function load(overrides?: Partial<{ q: string; department: string; status: string; dateFrom: string; dateTo: string; mineOnly: boolean; page: number; sortBy: 'created_at' | 'issue_date' | 'title' | 'status' | 'department' | 'authors' | 'publication_year'; sortDir: 'asc' | 'desc'; }>) {
     setLoading(true);
     setErrorMsg(null);
     try {
@@ -70,7 +72,7 @@ const Index = () => {
       const sd = overrides?.sortDir ?? sortDir;
       const { data, count, error } = await listPapers(
         { q: qv, department: dep as any, status: st as any, ownerId: mo && user ? user.id : undefined },
-        { page: pg, pageSize, dateFrom: df || undefined, dateTo: dt || undefined, sortBy: sb, sortDir: sd }
+        { page: pg, pageSize, dateFrom: df || undefined, dateTo: dt || undefined, sortBy: sb, sortDir: sd, fetchAll: (sb === 'authors' || sb === 'department') }
       );
       if (!error) {
         let list = (data || []) as ResearchPaper[];
@@ -203,6 +205,35 @@ const Index = () => {
     return () => { active = false; };
   }, [user]);
 
+  const getYear = (p: ResearchPaper) => {
+    if (typeof p.publication_year === 'number') return p.publication_year;
+    const d = (p as any).issue_date as string | undefined;
+    if (d && d.length >= 4) return Number(d.slice(0,4));
+    return undefined;
+  };
+
+  const onHeaderSort = (field: 'index'|'title'|'authors'|'department'|'status'|'year') => {
+    // Map UI fields to API sort fields
+    const map: Record<string, typeof sortBy> = {
+      index: 'created_at',
+      title: 'title',
+      authors: 'authors',
+      department: 'department',
+      status: 'status',
+      year: 'publication_year',
+    } as const;
+    const apiField = map[field];
+    if (sortBy === apiField) {
+      const nd = sortDir === 'asc' ? 'desc' : 'asc';
+      setSortDir(nd);
+      load({ sortBy: apiField, sortDir: nd });
+    } else {
+      setSortBy(apiField);
+      setSortDir('asc');
+      load({ sortBy: apiField, sortDir: 'asc' });
+    }
+  };
+
   const onSearch = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(1);
@@ -296,32 +327,7 @@ const Index = () => {
           </div>
         )}
 
-        {/* Toolbar */}
-        <div className="flex items-center gap-4 bg-gray-50 p-3 rounded-lg">
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Sort by</span>
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-              <SelectTrigger className="w-[160px] h-9"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="issue_date">Issue Date</SelectItem>
-                <SelectItem value="title">Title</SelectItem>
-                <SelectItem value="status">Status</SelectItem>
-                <SelectItem value="created_at">Created</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Direction</span>
-            <Select value={sortDir} onValueChange={(v) => setSortDir(v as any)}>
-              <SelectTrigger className="w-[120px] h-9"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="desc">Desc</SelectItem>
-                <SelectItem value="asc">Asc</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {/* Mine toggle removed as requested */}
-        </div>
+        {/* Toolbar removed: header-click sorting only */}
 
         {/* Tabs */}
         <div className="flex gap-2 mt-2">
@@ -376,16 +382,19 @@ const Index = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Authors</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={()=>onHeaderSort('index')}>Index {sortBy==='created_at' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={()=>onHeaderSort('title')}>Title {sortBy==='title' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={()=>onHeaderSort('authors')}>Authors {sortBy==='authors' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={()=>onHeaderSort('department')}>Department {sortBy==='department' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={()=>onHeaderSort('status')}>Status {sortBy==='status' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={()=>onHeaderSort('year')}>Year {sortBy==='publication_year' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {rows.map((p) => (
+                  {rows.map((p, idx) => (
                     <TableRow key={p.id} className="hover:bg-gray-50 transition h-14">
+                      <TableCell className="font-medium w-16">{(page-1)*pageSize + idx + 1}</TableCell>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           <DocumentIcon className="w-5 h-5 text-gray-500" />
@@ -395,6 +404,7 @@ const Index = () => {
                       <TableCell className="align-middle text-sm text-muted-foreground">{(p.authors || []).join(', ')}</TableCell>
                       <TableCell className="align-middle text-sm text-muted-foreground">{(p.department || '').toUpperCase() || '-'}</TableCell>
                       <TableCell className="align-middle text-sm text-muted-foreground">{p.status ? (p.status === 'published' ? 'Published' : 'Under Review') : '-'}</TableCell>
+                      <TableCell className="align-middle text-sm text-muted-foreground">{getYear(p) ?? '-'}</TableCell>
                       <TableCell className="text-right">
                         <div className="inline-flex items-center gap-2">
                           {p.file_url?.toLowerCase().endsWith('.pdf') && (

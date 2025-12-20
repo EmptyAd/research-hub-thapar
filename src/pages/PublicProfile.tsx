@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import SiteHeader from '@/components/layout/SiteHeader';
 import { supabase } from '@/utils/supabaseClient';
@@ -13,6 +13,8 @@ const PublicProfile = () => {
   const [about, setAbout] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'papers'|'patents'|'certificates'|'conferences'>('papers');
   const [papers, setPapers] = useState<any[]>([]);
+  const [sortBy, setSortBy] = useState<'index'|'title'|'authors'|'department'|'status'|'year'>('title');
+  const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
   const [patents, setPatents] = useState<any[]>([]);
   const [certificates, setCertificates] = useState<any[]>([]);
   const [conferences, setConferences] = useState<any[]>([]);
@@ -60,6 +62,39 @@ const PublicProfile = () => {
     load();
     return () => { active = false; };
   }, [id]);
+
+  const getYear = (p: any) => {
+    if (typeof p.publication_year === 'number') return p.publication_year;
+    if (typeof p.issue_date === 'string' && p.issue_date.length >= 4) return Number(p.issue_date.slice(0,4));
+    return undefined;
+  };
+
+  const toggleSort = (field: 'index'|'title'|'authors'|'department'|'status'|'year') => {
+    if (sortBy === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(field); setSortDir('asc'); }
+  };
+
+  const sortedPapers = useMemo(() => {
+    const arr = [...papers];
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return arr.sort((a,b) => {
+      const ai = papers.indexOf(a) + 1;
+      const bi = papers.indexOf(b) + 1;
+      let av: any; let bv: any;
+      switch (sortBy) {
+        case 'index': av = ai; bv = bi; break;
+        case 'title': av = (a.title||'').toLowerCase(); bv = (b.title||'').toLowerCase(); break;
+        case 'authors': av = (a.authors||[]).join(', ').toLowerCase(); bv = (b.authors||[]).join(', ').toLowerCase(); break;
+        case 'department': av = ((a.department||'') as string).toLowerCase(); bv = ((b.department||'') as string).toLowerCase(); break;
+        case 'status': av = (a.status||''); bv = (b.status||''); break;
+        case 'year': av = getYear(a) ?? -Infinity; bv = getYear(b) ?? -Infinity; break;
+        default: av = 0; bv = 0;
+      }
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+  }, [papers, sortBy, sortDir]);
 
   if (user && user.status === 'disabled') {
     return (
@@ -121,23 +156,25 @@ const PublicProfile = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Authors</TableHead>
-                <TableHead>Department</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Year</TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={()=>toggleSort('index')}>Index {sortBy==='index' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={()=>toggleSort('title')}>Title {sortBy==='title' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={()=>toggleSort('authors')}>Authors {sortBy==='authors' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={()=>toggleSort('department')}>Department {sortBy==='department' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={()=>toggleSort('status')}>Status {sortBy==='status' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
+                <TableHead className="cursor-pointer select-none" onClick={()=>toggleSort('year')}>Year {sortBy==='year' ? (sortDir==='asc'?'↑':'↓') : ''}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {papers.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-muted-foreground">No papers</TableCell></TableRow>
-              ) : papers.map((p:any) => (
+              {sortedPapers.length === 0 ? (
+                <TableRow><TableCell colSpan={6} className="text-muted-foreground">No papers</TableCell></TableRow>
+              ) : sortedPapers.map((p:any, idx:number) => (
                 <TableRow key={p.id}>
+                  <TableCell className="font-medium w-16">{idx+1}</TableCell>
                   <TableCell className="font-medium">{p.title}</TableCell>
                   <TableCell>{(p.authors || []).join(', ')}</TableCell>
                   <TableCell>{(p.department || '').toUpperCase() || '-'}</TableCell>
                   <TableCell>{p.status ? (p.status === 'published' ? 'Published' : 'Under Review') : '-'}</TableCell>
-                  <TableCell>{typeof p.issue_date === 'string' && p.issue_date ? String(p.issue_date).slice(0,4) : '-'}</TableCell>
+                  <TableCell>{getYear(p) ?? '-'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

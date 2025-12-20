@@ -37,8 +37,9 @@ export type ListOptions = {
   pageSize?: number; // default 10
   dateFrom?: string; // YYYY-MM-DD (issue_date >=)
   dateTo?: string;   // YYYY-MM-DD (issue_date <=)
-  sortBy?: 'created_at' | 'issue_date' | 'title' | 'status';
+  sortBy?: 'created_at' | 'issue_date' | 'title' | 'status' | 'department' | 'authors' | 'publication_year';
   sortDir?: 'asc' | 'desc';
+  fetchAll?: boolean; // if true, do not apply SQL range; fetch all rows first
 };
 
 const TABLE = 'research_papers_simple';
@@ -51,6 +52,7 @@ export async function listPapers(filters: PaperFilters = {}, options: ListOption
 
   const sortBy = options.sortBy || 'created_at';
   const ascending = (options.sortDir || 'desc') === 'asc';
+  const wantAll = !!options.fetchAll;
   // If listing for a specific owner, read via documents (owner or co-author) and filter client-side.
   if (filters.ownerId) {
     const mine = await getMyPapers(filters.ownerId);
@@ -98,7 +100,18 @@ export async function listPapers(filters: PaperFilters = {}, options: ListOption
     return { data: paged, count: total, error: null } as const;
   }
 
-  let query = supabase.from(TABLE).select('*', { count: 'exact' }).order(sortBy, { ascending });
+  // Map sortBy for SQL if needed
+  const sqlSortCol = (() => {
+    if (sortBy === 'publication_year') return 'issue_date'; // approximate by date
+    if (sortBy === 'department') return 'department'; // some views expose department or department_text
+    if (sortBy === 'authors') return undefined; // cannot order by array; will sort client-side
+    return sortBy;
+  })();
+
+  let query = supabase.from(TABLE).select('*', { count: 'exact' });
+  if (sqlSortCol) {
+    query = query.order(sqlSortCol as any, { ascending, nullsFirst: !ascending });
+  }
 
   // Department is derived (may not be a simple column); filter client-side below
   if (filters.year) {
@@ -115,7 +128,7 @@ export async function listPapers(filters: PaperFilters = {}, options: ListOption
   // Do NOT apply SQL filtering for q; we perform a broad client-side match across many fields below.
   // Pagination: when performing broad q search we fetch all then paginate client-side
   const broadSearch = !!(filters.q && filters.q.trim());
-  if (!broadSearch) {
+  if (!broadSearch && !wantAll && sortBy !== 'authors') {
     query = query.range(from, to);
   }
 
@@ -184,9 +197,31 @@ export async function listPapers(filters: PaperFilters = {}, options: ListOption
     }
   } catch {}
 
-  // Client-side pagination when broad search
+  // Client-side sorting for fields not reliably sortable in SQL
+  if (sortBy === 'authors') {
+    const dir = ascending ? 1 : -1;
+    rows = rows.sort((a, b) => {
+      const av = (a.authors || []).join(', ').toLowerCase();
+      const bv = (b.authors || []).join(', ').toLowerCase();
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+  }
+  if (sortBy === 'department') {
+    const dir = ascending ? 1 : -1;
+    rows = rows.sort((a: any, b: any) => {
+      const av = String(a.department || a.department_text || '').toLowerCase();
+      const bv = String(b.department || b.department_text || '').toLowerCase();
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+  }
+
+  // Client-side pagination when broad search or when we fetched all to enable global sorting
   let total = count ?? rows.length;
-  if (broadSearch) {
+  if (broadSearch || wantAll || sortBy === 'authors') {
     total = rows.length;
     rows = rows.slice(from, to + 1);
   }
