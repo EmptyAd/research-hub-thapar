@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import SiteHeader from "@/components/layout/SiteHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,7 @@ const Report = () => {
 
   const [user, setUser] = useState(getSessionUser());
   const [role, setRole] = useState<string | undefined>(undefined);
+  const location = useLocation();
 
   const [department, setDepartment] = useState<string>("");
   const [status, setStatus] = useState<string>("");
@@ -85,6 +86,18 @@ const Report = () => {
     return () => { active = false; };
   }, [user?.id]);
 
+  // For non-admin/HOD views, hide the User filter and ensure no explicit user filter is applied
+  useEffect(() => {
+    const sp = new URLSearchParams(location.search);
+    const scopeMe = sp.get('scope') === 'me';
+    const isPriv = role === 'admin' || role === 'hod';
+    if (!isPriv || scopeMe) {
+      // Do not constrain by created_by via the UI filter; SQL scoping will restrict to own/coauthored
+      if (selectedUserIds.length !== 0) setSelectedUserIds([]);
+      if (userId !== 'all') setUserId('all');
+    }
+  }, [role, location.search]);
+
   // Load users for charts (uploader names)
   useEffect(() => {
     async function loadUsers() {
@@ -118,6 +131,25 @@ const Report = () => {
       if (status) q = q.eq('status', status);
       if (selectedUserIds.length > 0) q = q.in('created_by', selectedUserIds);
       else if (userId !== 'all') q = q.eq('created_by', userId);
+
+      // Role-based scoping: for non-admin/HOD, include only own or coauthored docs
+      const sp = new URLSearchParams(location.search);
+      const scopeMe = sp.get('scope') === 'me';
+      const isPriv = role === 'admin' || role === 'hod';
+      const myScope = scopeMe || !isPriv;
+      if (myScope && user?.id) {
+        const { data: da } = await supabase
+          .from('document_authors')
+          .select('document_id')
+          .eq('user_id', user.id);
+        const ids = ((da || []) as any[]).map(r => r.document_id).filter(Boolean);
+        if (ids.length > 0) {
+          const idsCsv = ids.map((x: string) => `"${x}"`).join(',');
+          q = q.or(`created_by.eq.${user.id},id.in.(${idsCsv})`);
+        } else {
+          q = q.eq('created_by', user.id);
+        }
+      }
 
       const { data, error } = await q;
       if (error) throw error;
@@ -491,7 +523,11 @@ const Report = () => {
     setLoading(true);
     try {
       const hasMultiUsers = selectedUserIds.length > 0;
-      if ((docType === 'any' || docType === 'research_paper') && !hasMultiUsers && userId === 'all') {
+      const sp = new URLSearchParams(location.search);
+      const scopeMe = sp.get('scope') === 'me';
+      const isPriv = role === 'admin' || role === 'hod';
+      const myScope = scopeMe || !isPriv;
+      if ((docType === 'any' || docType === 'research_paper') && !hasMultiUsers && userId === 'all' && !myScope) {
         const { data } = await listPapers(
           { department: department || undefined as any, status: status || undefined as any },
           { page: 1, pageSize: 1000, dateFrom: dateFrom || undefined, dateTo: dateTo || undefined, sortBy: 'issue_date', sortDir: 'desc' }
@@ -504,8 +540,21 @@ const Report = () => {
         if (status) q = q.eq('status', status);
         if (hasMultiUsers) q = q.in('created_by', selectedUserIds);
         else if (userId !== 'all') q = q.eq('created_by', userId);
+        if (myScope && user?.id) {
+          const { data: da } = await supabase
+            .from('document_authors')
+            .select('document_id')
+            .eq('user_id', user.id);
+          const ids = ((da || []) as any[]).map(r => r.document_id).filter(Boolean);
+          if (ids.length > 0) {
+            const idsCsv = ids.map((x: string) => `"${x}"`).join(',');
+            q = q.or(`created_by.eq.${user.id},id.in.(${idsCsv})`);
+          } else {
+            q = q.eq('created_by', user.id);
+          }
+        }
         const { data, error } = await q;
-        const docs = (data || []) as any[];
+        let docs = (data || []) as any[];
         // Date filter based on metadata.issue_date/publication_date
         const from = dateFrom ? new Date(dateFrom) : null;
         const to = dateTo ? new Date(dateTo) : null;
@@ -553,6 +602,24 @@ const Report = () => {
     if (status) q = q.eq('status', status);
     if (selectedUserIds.length > 0) q = q.in('created_by', selectedUserIds);
     else if (userId !== 'all') q = q.eq('created_by', userId);
+    // Scope for non-admins
+    const sp2 = new URLSearchParams(location.search);
+    const scopeMe2 = sp2.get('scope') === 'me';
+    const isPriv2 = role === 'admin' || role === 'hod';
+    const myScope2 = scopeMe2 || !isPriv2;
+    if (myScope2 && user?.id) {
+      const { data: da } = await supabase
+        .from('document_authors')
+        .select('document_id')
+        .eq('user_id', user.id);
+      const ids = ((da || []) as any[]).map(r => r.document_id).filter(Boolean);
+      if (ids.length > 0) {
+        const idsCsv = ids.map((x: string) => `"${x}"`).join(',');
+        q = q.or(`created_by.eq.${user.id},id.in.(${idsCsv})`);
+      } else {
+        q = q.eq('created_by', user.id);
+      }
+    }
     const { data } = await q;
     let docs = (data || []) as any[];
     const from = dateFrom ? new Date(dateFrom) : null;
@@ -765,11 +832,17 @@ const Report = () => {
   const navigate = useNavigate();
   const onLogout = () => { logout(); navigate('/login'); };
 
+  // View authorization: non-admin/HOD can access when scope=me
+  const spView = new URLSearchParams(location.search);
+  const scopeMeView = spView.get('scope') === 'me';
+  const isPrivView = role === 'admin' || role === 'hod';
+  const blocked = !!role && !isPrivView && !scopeMeView;
+
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
 
-      {role && !(role === 'admin' || role === 'hod') ? (
+      {blocked ? (
         <main className="container mx-auto py-16">
           <div className="text-center space-y-2">
             <h1 className="text-2xl font-semibold">Not authorized</h1>
@@ -823,54 +896,56 @@ const Report = () => {
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label htmlFor="usr">User</Label>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="w-full justify-between">
-                  {selectedUserIds.length === 0 ? 'All Users' : `${selectedUserIds.length} selected`}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-72 p-2" align="end">
-                <Input
-                  id="usr"
-                  placeholder="Search user"
-                  value={userQuery}
-                  onChange={(e)=> setUserQuery(e.target.value)}
-                  className="mb-2 h-8"
-                  onKeyDown={(e)=> e.stopPropagation()}
-                />
-                <div className="max-h-64 overflow-auto">
-                  <label className="flex items-center gap-2 px-2 py-1 text-sm font-medium">
-                    <input
-                      type="checkbox"
-                      checked={selectedUserIds.length === users.length && users.length > 0}
-                      onChange={(e)=> setSelectedUserIds(e.target.checked ? users.map(u=>u.id) : [])}
-                      onClick={(e)=> e.stopPropagation()}
-                    />
-                    All Users
-                  </label>
-                  <div className="h-px bg-border my-1" />
-                  {users
-                    .filter(u => (u.full_name || '').toLowerCase().includes(userQuery.toLowerCase()))
-                    .map(u => (
-                      <label key={u.id} className="flex items-center gap-2 px-2 py-1 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedUserIds.includes(u.id)}
-                          onChange={(e)=> {
-                            setSelectedUserIds(prev => e.target.checked ? Array.from(new Set([...prev, u.id])) : prev.filter(id => id !== u.id));
-                          }}
-                          onClick={(e)=> e.stopPropagation()}
-                        />
-                        {u.full_name}
-                      </label>
-                    ))}
-                </div>
-                <p className="text-xs text-muted-foreground mt-2 px-2">Tip: leave empty to include everyone or tick specific users.</p>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          {(role === 'admin' || role === 'hod') && (
+            <div>
+              <Label htmlFor="usr">User</Label>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="w-full justify-between">
+                    {selectedUserIds.length === 0 ? 'All Users' : `${selectedUserIds.length} selected`}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-72 p-2" align="end">
+                  <Input
+                    id="usr"
+                    placeholder="Search user"
+                    value={userQuery}
+                    onChange={(e)=> setUserQuery(e.target.value)}
+                    className="mb-2 h-8"
+                    onKeyDown={(e)=> e.stopPropagation()}
+                  />
+                  <div className="max-h-64 overflow-auto">
+                    <label className="flex items-center gap-2 px-2 py-1 text-sm font-medium">
+                      <input
+                        type="checkbox"
+                        checked={selectedUserIds.length === users.length && users.length > 0}
+                        onChange={(e)=> setSelectedUserIds(e.target.checked ? users.map(u=>u.id) : [])}
+                        onClick={(e)=> e.stopPropagation()}
+                      />
+                      All Users
+                    </label>
+                    <div className="h-px bg-border my-1" />
+                    {users
+                      .filter(u => (u.full_name || '').toLowerCase().includes(userQuery.toLowerCase()))
+                      .map(u => (
+                        <label key={u.id} className="flex items-center gap-2 px-2 py-1 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={selectedUserIds.includes(u.id)}
+                            onChange={(e)=> {
+                              setSelectedUserIds(prev => e.target.checked ? Array.from(new Set([...prev, u.id])) : prev.filter(id => id !== u.id));
+                            }}
+                            onClick={(e)=> e.stopPropagation()}
+                          />
+                          {u.full_name}
+                        </label>
+                      ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2 px-2">Tip: leave empty to include everyone or tick specific users.</p>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
           <div>
             <Label htmlFor="from">Date of Issue (From)</Label>
             <Input id="from" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />

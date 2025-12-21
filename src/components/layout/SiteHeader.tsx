@@ -3,9 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/contexts/AuthContext";
-import { Bell, Search, Upload, Settings } from "lucide-react";
-import { MessageBadge } from '@/components/MessageBadge';
-import { AnnouncementBadge } from '@/components/AnnouncementBadge';
+import { Search, Settings } from "lucide-react";
+//
 import { NotificationBell } from '@/components/NotificationBell';
 import { getSessionUser, SESSION_CHANGE_EVENT, logout as legacyLogout } from "@/utils/auth";
 import { getUserRole } from "@/utils/users";
@@ -78,25 +77,15 @@ const SiteHeader = () => {
         <div className="flex items-center gap-2">
           {user || legacyUser ? (
             <>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button className="rounded-full"><Upload className="h-4 w-4 mr-2" />Upload</Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuItem onClick={()=> navigate('/upload?type=research_paper')}>
-                    Research Paper
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={()=> navigate('/upload?type=patent')}>
-                    Patent
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={()=> navigate('/upload?type=certificate')}>
-                    Certificate
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={()=> navigate('/upload?type=conference_paper')}>
-                    Conference Paper
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button
+                className="rounded-full"
+                onClick={() => {
+                  const isPriv = role === 'admin' || role === 'hod';
+                  navigate(isPriv ? '/report' : '/report?scope=me');
+                }}
+              >
+                Insights
+              </Button>
               <NotificationBell />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

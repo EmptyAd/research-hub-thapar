@@ -47,7 +47,7 @@ const Dashboard = () => {
   const [cpMsg, setCpMsg] = useState<string | null>(null);
   const [role, setRole] = useState<string | undefined>(undefined);
   const [docStats, setDocStats] = useState({ papers: 0, patents: 0, certificates: 0, conferences: 0 });
-  const [activeTab, setActiveTab] = useState<'about' | 'papers' | 'patents' | 'certificates' | 'conferences'>('about');
+  const [activeTab, setActiveTab] = useState<'about' | 'papers' | 'patents' | 'certificates' | 'conferences' | 'insights'>('about');
   const [patents, setPatents] = useState<any[]>([]);
   const [certificates, setCertificates] = useState<any[]>([]);
   const [conferences, setConferences] = useState<any[]>([]);
@@ -292,19 +292,24 @@ const Dashboard = () => {
                 {t.label}
               </button>
             ))}
+            
           
   </div>
-  {activeTab !== "about" && (
+  {activeTab !== 'about' && (
     <Button
       onClick={() => {
-        const type = activeTab === "papers" ? "research_paper" : activeTab === "patents" ? "patent" : activeTab === "certificates" ? "certificate" : "conference_paper";
+        const type =
+          activeTab === 'papers' ? 'research_paper' :
+          activeTab === 'patents' ? 'patent' :
+          activeTab === 'certificates' ? 'certificate' :
+          'conference_paper';
         navigate(`/upload?type=${type}`);
       }}
     >
-      {activeTab === "papers" && "+ Upload Research Paper"}
-      {activeTab === "patents" && "+ Upload Patent"}
-      {activeTab === "certificates" && "+ Upload Certificate"}
-      {activeTab === "conferences" && "+ Upload Conference"}
+      {activeTab === 'papers' && '+ Upload Research Paper'}
+      {activeTab === 'patents' && '+ Upload Patent'}
+      {activeTab === 'certificates' && '+ Upload Certificate'}
+      {activeTab === 'conferences' && '+ Upload Conference'}
     </Button>
   )}
 </div>
