@@ -275,8 +275,7 @@ const Dashboard = () => {
 
         {/* Tabs */}
         <section className="space-y-4">
-          <div className="flex items-center justify-between gap-2">
-  <div className="flex gap-2">
+          <div className="flex gap-2">
             {([
               { key: 'about', label: 'About' },
               { key: 'papers', label: 'Research Paper' },
@@ -292,22 +291,7 @@ const Dashboard = () => {
                 {t.label}
               </button>
             ))}
-          
-  </div>
-  {activeTab !== "about" && (
-    <Button
-      onClick={() => {
-        const type = activeTab === "papers" ? "research_paper" : activeTab === "patents" ? "patent" : activeTab === "certificates" ? "certificate" : "conference_paper";
-        navigate(`/upload?type=${type}`);
-      }}
-    >
-      {activeTab === "papers" && "+ Upload Research Paper"}
-      {activeTab === "patents" && "+ Upload Patent"}
-      {activeTab === "certificates" && "+ Upload Certificate"}
-      {activeTab === "conferences" && "+ Upload Conference"}
-    </Button>
-  )}
-</div>
+          </div>
 
           {/* About */}
           {activeTab === 'about' && (

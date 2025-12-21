@@ -329,23 +329,38 @@ const Index = () => {
 
         {/* Toolbar removed: header-click sorting only */}
 
-        {/* Tabs */}
-        <div className="flex gap-2 mt-2">
-          {([
-            { key: 'papers', label: 'Research Paper' },
-            { key: 'patents', label: 'Patents' },
-            { key: 'certificates', label: 'Certificates' },
-            { key: 'conferences', label: 'Conference' },
-            { key: 'people', label: 'People' },
-          ] as const).map((t) => (
-            <button
-              key={t.key}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition ${activeTab===t.key ? 'bg-blue-100 text-blue-700' : 'text-muted-foreground hover:bg-gray-100'}`}
-              onClick={() => setActiveTab(t.key)}
+        {/* Tabs + context-aware Upload */}
+        <div className="flex items-center justify-between gap-2 mt-2">
+          <div className="flex gap-2">
+            {([
+              { key: 'papers', label: 'Research Paper' },
+              { key: 'patents', label: 'Patents' },
+              { key: 'certificates', label: 'Certificates' },
+              { key: 'conferences', label: 'Conference' },
+              { key: 'people', label: 'People' },
+            ] as const).map((t) => (
+              <button
+                key={t.key}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition ${activeTab===t.key ? 'bg-blue-100 text-blue-700' : 'text-muted-foreground hover:bg-gray-100'}`}
+                onClick={() => setActiveTab(t.key)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {activeTab !== 'people' && (
+            <Button
+              onClick={() => {
+                const type = activeTab === 'papers' ? 'research_paper' : activeTab === 'patents' ? 'patent' : activeTab === 'certificates' ? 'certificate' : 'conference_paper';
+                navigate(`/upload?type=${type}`);
+              }}
             >
-              {t.label}
-            </button>
-          ))}
+              {activeTab === 'papers' && '+ Upload Research Paper'}
+              {activeTab === 'patents' && '+ Upload Patent'}
+              {activeTab === 'certificates' && '+ Upload Certificate'}
+              {activeTab === 'conferences' && '+ Upload Conference'}
+            </Button>
+          )}
         </div>
 
         {/* Papers tab */}

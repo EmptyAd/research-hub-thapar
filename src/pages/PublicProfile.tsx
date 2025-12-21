@@ -132,22 +132,32 @@ const PublicProfile = () => {
         )}
       </section>
 
-      {/* Tabs */}
-      <div className="flex gap-2">
-        {([
-          { key: 'papers', label: 'Research Paper' },
-          { key: 'patents', label: 'Patents' },
-          { key: 'certificates', label: 'Certificates' },
-          { key: 'conferences', label: 'Conference' },
-        ] as const).map((t) => (
-          <button
-            key={t.key}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition ${activeTab===t.key ? 'bg-blue-100 text-blue-700' : 'text-muted-foreground hover:bg-gray-100'}`}
-            onClick={() => setActiveTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
+      {/* Tabs + context-aware Upload */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex gap-2">
+          {([
+            { key: 'papers', label: 'Research Paper' },
+            { key: 'patents', label: 'Patents' },
+            { key: 'certificates', label: 'Certificates' },
+            { key: 'conferences', label: 'Conference' },
+          ] as const).map((t) => (
+            <button
+              key={t.key}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition ${activeTab===t.key ? 'bg-blue-100 text-blue-700' : 'text-muted-foreground hover:bg-gray-100'}`}
+              onClick={() => setActiveTab(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <Button asChild>
+          <Link to={`/upload?type=${activeTab === 'papers' ? 'research_paper' : activeTab === 'patents' ? 'patent' : activeTab === 'certificates' ? 'certificate' : 'conference_paper'}`}>
+            {activeTab === 'papers' && '+ Upload Research Paper'}
+            {activeTab === 'patents' && '+ Upload Patent'}
+            {activeTab === 'certificates' && '+ Upload Certificate'}
+            {activeTab === 'conferences' && '+ Upload Conference'}
+          </Link>
+        </Button>
       </div>
 
       {/* Papers */}
