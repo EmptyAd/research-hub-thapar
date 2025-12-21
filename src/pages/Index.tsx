@@ -348,7 +348,7 @@ const Index = () => {
               </button>
             ))}
           </div>
-          {activeTab !== 'people' && (
+          {user && activeTab !== 'people' && (
             <Button
               onClick={() => {
                 const type = activeTab === 'papers' ? 'research_paper' : activeTab === 'patents' ? 'patent' : activeTab === 'certificates' ? 'certificate' : 'conference_paper';

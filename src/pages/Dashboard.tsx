@@ -295,7 +295,7 @@ const Dashboard = () => {
             
           
   </div>
-  {activeTab !== 'about' && (
+  {user && activeTab !== 'about' && (
     <Button
       onClick={() => {
         const type =

@@ -5,6 +5,7 @@ import { supabase } from '@/utils/supabaseClient';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { listDocuments } from '@/utils/documents';
+import { getSessionUser, SESSION_CHANGE_EVENT } from '@/utils/auth';
 
 const PublicProfile = () => {
   const { id } = useParams();
@@ -19,6 +20,7 @@ const PublicProfile = () => {
   const [certificates, setCertificates] = useState<any[]>([]);
   const [conferences, setConferences] = useState<any[]>([]);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [sessionUser, setSessionUser] = useState<any>(() => getSessionUser());
 
   useEffect(() => {
     let active = true;
@@ -62,6 +64,16 @@ const PublicProfile = () => {
     load();
     return () => { active = false; };
   }, [id]);
+
+  useEffect(() => {
+    const onSession = () => setSessionUser(getSessionUser());
+    window.addEventListener(SESSION_CHANGE_EVENT, onSession as any);
+    window.addEventListener('storage', onSession);
+    return () => {
+      window.removeEventListener(SESSION_CHANGE_EVENT, onSession as any);
+      window.removeEventListener('storage', onSession);
+    };
+  }, []);
 
   const getYear = (p: any) => {
     if (typeof p.publication_year === 'number') return p.publication_year;
@@ -150,14 +162,16 @@ const PublicProfile = () => {
             </button>
           ))}
         </div>
-        <Button asChild>
-          <Link to={`/upload?type=${activeTab === 'papers' ? 'research_paper' : activeTab === 'patents' ? 'patent' : activeTab === 'certificates' ? 'certificate' : 'conference_paper'}`}>
-            {activeTab === 'papers' && '+ Upload Research Paper'}
-            {activeTab === 'patents' && '+ Upload Patent'}
-            {activeTab === 'certificates' && '+ Upload Certificate'}
-            {activeTab === 'conferences' && '+ Upload Conference'}
-          </Link>
-        </Button>
+        {sessionUser && (
+          <Button asChild>
+            <Link to={`/upload?type=${activeTab === 'papers' ? 'research_paper' : activeTab === 'patents' ? 'patent' : activeTab === 'certificates' ? 'certificate' : 'conference_paper'}`}>
+              {activeTab === 'papers' && '+ Upload Research Paper'}
+              {activeTab === 'patents' && '+ Upload Patent'}
+              {activeTab === 'certificates' && '+ Upload Certificate'}
+              {activeTab === 'conferences' && '+ Upload Conference'}
+            </Link>
+          </Button>
+        )}
       </div>
 
       {/* Papers */}
